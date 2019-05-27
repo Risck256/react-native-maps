@@ -19,9 +19,10 @@ import com.google.android.gms.maps.GoogleMapOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MapStyleOptions;
+import com.google.maps.android.data.kml.KmlLayer;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
 
 import javax.annotation.Nullable;
 
@@ -51,20 +52,12 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
   );
 
   private final ReactApplicationContext appContext;
-  private AirMapMarkerManager markerManager;
 
   protected GoogleMapOptions googleMapOptions;
 
   public AirMapManager(ReactApplicationContext context) {
     this.appContext = context;
     this.googleMapOptions = new GoogleMapOptions();
-  }
-
-  public AirMapMarkerManager getMarkerManager() {
-    return this.markerManager;
-  }
-  public void setMarkerManager(AirMapMarkerManager markerManager) {
-    this.markerManager = markerManager;
   }
 
   @Override
@@ -85,6 +78,26 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
     context
         .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
         .emit("onError", error);
+  }
+
+  @ReactProp(name = "clusterMarker")
+  public void setClusterMarker(AirMapView view, ReadableArray regions) {
+    view.addClusterMarker(regions);
+  }
+
+  @ReactProp(name = "assetMarker")
+  public void setAssetMarker(AirMapView view, ReadableMap path) {
+    view.setAssetMarker(path);
+  }
+
+  public Map getExportedCustomBubblingEventTypeConstants() {
+    return MapBuilder.builder()
+            .put(
+                    "onClusterMarkerPress",
+                    MapBuilder.of(
+                            "phasedRegistrationNames",
+                            MapBuilder.of("bubbled", "onClusterMarkerPress")))
+            .build();
   }
 
   @ReactProp(name = "region")
