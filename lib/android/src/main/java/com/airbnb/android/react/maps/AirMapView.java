@@ -4,11 +4,14 @@ import android.content.Context;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.os.Build;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.view.GestureDetectorCompat;
 import android.support.v4.view.MotionEventCompat;
 import android.util.Log;
@@ -22,6 +25,11 @@ import android.widget.RelativeLayout;
 import android.location.Location;
 import android.widget.Toast;
 
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.load.engine.DiskCacheStrategy;
+import com.bumptech.glide.request.RequestOptions;
+import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.transition.Transition;
 import com.facebook.react.bridge.LifecycleEventListener;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableArray;
@@ -114,6 +122,9 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   private boolean destroyed = false;
   private final ThemedReactContext context;
   private final EventDispatcher eventDispatcher;
+  private CustomClusterRenderer renderer;
+//  private String selectedMarker;
+//  private Marker mSelectedMarker;
 
   private ViewAttacherGroup attacherGroup;
 
@@ -217,9 +228,9 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   }
 
   public void setAssetMarker(ReadableMap path) {
-    final CustomClusterRenderer renderer = new CustomClusterRenderer(this.context, map, mClusterManager, path);
+    renderer = new CustomClusterRenderer(this.context, map, mClusterManager, path);
     mClusterManager.setRenderer(renderer);
-
+//    selectedMarker = path.getString("selected");
   }
 
 
@@ -246,15 +257,23 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     mClusterManager.setOnClusterItemClickListener(new ClusterManager.OnClusterItemClickListener<Cluster>() {
       @Override
       public boolean onClusterItemClick(Cluster cluster) {
-    WritableMap event = Arguments.createMap();
-    event.putString("id", cluster.title);
-    context.getJSModule(RCTEventEmitter.class).receiveEvent(
-            getId(),
-            "onClusterMarkerPress",
-            event);
-        return true;
-      }
-    });
+//        mSelectedMarker = renderer.getMarker(cluster);
+//        if (mSelectedMarker != null) {
+////          int id = context.getResources().getIdentifier(selectedMarker, "drawable", context.getPackageName());
+////          Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), id);
+////          mSelectedMarker.setIcon(BitmapDescriptorFactory.fromBitmap(bitmap));
+//        } else {
+//
+//        }
+        WritableMap event = Arguments.createMap();
+        event.putString("id", cluster.title);
+        context.getJSModule(RCTEventEmitter.class).receiveEvent(
+                getId(),
+                "onClusterMarkerPress",
+                event);
+            return true;
+          }
+        });
 
     manager.pushEvent(context, this, "onMapReady", new WritableNativeMap());
 
