@@ -11,7 +11,7 @@
         android:layout_width="50dp"
         android:layout_height="50dp"
         android:gravity="center"
-        android:textColor="#ffffff"
+        android:textColor="#636363"
         tools:text="56"/>
 
 </FrameLayout>
