@@ -330,7 +330,7 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     });
 
     //cluster
-//    map.setOnMarkerClickListener(mClusterManager);
+    map.setOnMarkerClickListener(mClusterManager);
 
     map.setOnPolygonClickListener(new GoogleMap.OnPolygonClickListener() {
       @Override
@@ -372,7 +372,7 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     });
 
     //cluster
-//    map.setOnInfoWindowClickListener(mClusterManager);
+    map.setOnInfoWindowClickListener(mClusterManager);
 
     map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
       @Override
@@ -422,7 +422,7 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     });
 
     //cluster
-//    map.setOnCameraIdleListener(mClusterManager);
+    map.setOnCameraIdleListener(mClusterManager);
 
     mClusterManager.cluster();
 

@@ -38,9 +38,6 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-import java.io.File;
-import java.io.FileInputStream;
-
 import javax.annotation.Nullable;
 
 public class AirMapMarker extends AirMapFeature {
@@ -323,7 +320,7 @@ public class AirMapMarker extends AirMapFeature {
       iconBitmapDescriptor = null;
       update(true);
     } else if (uri.startsWith("http://") || uri.startsWith("https://") ||
-            uri.startsWith("asset://")) {
+        uri.startsWith("file://") || uri.startsWith("asset://")) {
       ImageRequest imageRequest = ImageRequestBuilder
           .newBuilderWithSource(Uri.parse(uri))
           .build();
@@ -336,32 +333,18 @@ public class AirMapMarker extends AirMapFeature {
           .setOldController(logoHolder.getController())
           .build();
       logoHolder.setController(controller);
-    } else if (uri.startsWith("file://")) {
-      String path = uri.replace("file://", "");
-      File file = new  File(path);
-      if (file.exists()) {
-        try {
-          FileInputStream inputStream = new FileInputStream(file);
-          iconBitmap = BitmapFactory.decodeStream(inputStream);
-          iconBitmapDescriptor = BitmapDescriptorFactory.fromBitmap(iconBitmap);
-          update(true);
-          inputStream.close();
-        } catch (Exception e) {
-          update(true);
-        }
-      }
     } else {
       iconBitmapDescriptor = getBitmapDescriptorByName(uri);
       if (iconBitmapDescriptor != null) {
-        int drawableId = getDrawableResourceByName(uri);
-        iconBitmap = BitmapFactory.decodeResource(getResources(), drawableId);
-        if (iconBitmap == null) { // VectorDrawable or similar
-          Drawable drawable = getResources().getDrawable(drawableId);
-          iconBitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-          drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
-          Canvas canvas = new Canvas(iconBitmap);
-          drawable.draw(canvas);
-        }
+          int drawableId = getDrawableResourceByName(uri);
+          iconBitmap = BitmapFactory.decodeResource(getResources(), drawableId);
+          if (iconBitmap == null) { // VectorDrawable or similar
+              Drawable drawable = getResources().getDrawable(drawableId);
+              iconBitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+              drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+              Canvas canvas = new Canvas(iconBitmap);
+              drawable.draw(canvas);
+          }
       }
       update(true);
     }
