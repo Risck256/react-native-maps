@@ -21,8 +21,8 @@ import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.maps.android.data.kml.KmlLayer;
 
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 import javax.annotation.Nullable;
 
@@ -37,7 +37,7 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
   private static final int FIT_TO_SUPPLIED_MARKERS = 6;
   private static final int FIT_TO_COORDINATES = 7;
   private static final int SET_MAP_BOUNDARIES = 8;
-  private static final int ANIMATE_TO_NAVIGATION = 9; 
+  private static final int ANIMATE_TO_NAVIGATION = 9;
   private static final int SET_INDOOR_ACTIVE_LEVEL_INDEX = 10;
   private static final int SET_CAMERA = 11;
   private static final int ANIMATE_CAMERA = 12;
@@ -52,12 +52,20 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
   );
 
   private final ReactApplicationContext appContext;
+  private AirMapMarkerManager markerManager;
 
   protected GoogleMapOptions googleMapOptions;
 
   public AirMapManager(ReactApplicationContext context) {
     this.appContext = context;
     this.googleMapOptions = new GoogleMapOptions();
+  }
+
+  public AirMapMarkerManager getMarkerManager() {
+    return this.markerManager;
+  }
+  public void setMarkerManager(AirMapMarkerManager markerManager) {
+    this.markerManager = markerManager;
   }
 
   @Override
@@ -395,7 +403,7 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
 
     return map;
   }
-  
+
   @Nullable
   @Override
   public Map<String, Integer> getCommandsMap() {

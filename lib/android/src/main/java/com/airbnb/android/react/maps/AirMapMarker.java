@@ -38,9 +38,6 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-import java.io.File;
-import java.io.FileInputStream;
-
 import javax.annotation.Nullable;
 
 public class AirMapMarker extends AirMapFeature {
@@ -82,6 +79,8 @@ public class AirMapMarker extends AirMapFeature {
   private boolean hasViewChanges = true;
 
   private boolean hasCustomMarkerView = false;
+  private final AirMapMarkerManager markerManager;
+  private String imageUri;
 
   private final DraweeHolder<?> logoHolder;
   private DataSource<CloseableReference<CloseableImage>> dataSource;
@@ -113,20 +112,26 @@ public class AirMapMarker extends AirMapFeature {
               CloseableReference.closeSafely(imageReference);
             }
           }
+          if (AirMapMarker.this.markerManager != null && AirMapMarker.this.imageUri != null) {
+            AirMapMarker.this.markerManager.getSharedIcon(AirMapMarker.this.imageUri)
+                .updateIcon(iconBitmapDescriptor, iconBitmap);
+          }
           update(true);
         }
       };
 
-  public AirMapMarker(Context context) {
+  public AirMapMarker(Context context, AirMapMarkerManager markerManager) {
     super(context);
     this.context = context;
+    this.markerManager = markerManager;
     logoHolder = DraweeHolder.create(createDraweeHierarchy(), context);
     logoHolder.onAttach();
   }
 
-  public AirMapMarker(Context context, MarkerOptions options) {
+  public AirMapMarker(Context context, MarkerOptions options, AirMapMarkerManager markerManager) {
     super(context);
     this.context = context;
+    this.markerManager = markerManager;
     logoHolder = DraweeHolder.create(createDraweeHierarchy(), context);
     logoHolder.onAttach();
 
@@ -282,7 +287,7 @@ public class AirMapMarker extends AirMapFeature {
   }
 
   public void updateMarkerIcon() {
-    if (!hasViewChanges) return;
+    if (marker == null) return;
 
     if (!hasCustomMarkerView) {
       // No more updates for this, as it's a simple icon
@@ -319,11 +324,36 @@ public class AirMapMarker extends AirMapFeature {
   public void setImage(String uri) {
     hasViewChanges = true;
 
+    boolean shouldLoadImage = true;
+
+    if (this.markerManager != null) {
+      // remove marker from previous shared icon if needed, to avoid future updates from it.
+      // remove the shared icon completely if no markers on it as well.
+      // this is to avoid memory leak due to orphan bitmaps.
+      //
+      // However in case where client want to update all markers from icon A to icon B
+      // and after some time to update back from icon B to icon A
+      // it may be better to keep it though. We assume that is rare.
+      if (this.imageUri != null) {
+        this.markerManager.getSharedIcon(this.imageUri).removeMarker(this);
+        this.markerManager.removeSharedIconIfEmpty(this.imageUri);
+      }
+      if (uri != null) {
+        // listening for marker bitmap descriptor update, as well as check whether to load the image.
+        AirMapMarkerManager.AirMapMarkerSharedIcon sharedIcon = this.markerManager.getSharedIcon(uri);
+        sharedIcon.addMarker(this);
+        shouldLoadImage = sharedIcon.shouldLoadImage();
+      }
+    }
+
+    this.imageUri = uri;
+    if (!shouldLoadImage) {return;}
+
     if (uri == null) {
       iconBitmapDescriptor = null;
       update(true);
     } else if (uri.startsWith("http://") || uri.startsWith("https://") ||
-            uri.startsWith("asset://")) {
+        uri.startsWith("file://") || uri.startsWith("asset://") || uri.startsWith("data:")) {
       ImageRequest imageRequest = ImageRequestBuilder
           .newBuilderWithSource(Uri.parse(uri))
           .build();
@@ -336,35 +366,35 @@ public class AirMapMarker extends AirMapFeature {
           .setOldController(logoHolder.getController())
           .build();
       logoHolder.setController(controller);
-    } else if (uri.startsWith("file://")) {
-      String path = uri.replace("file://", "");
-      File file = new  File(path);
-      if (file.exists()) {
-        try {
-          FileInputStream inputStream = new FileInputStream(file);
-          iconBitmap = BitmapFactory.decodeStream(inputStream);
-          iconBitmapDescriptor = BitmapDescriptorFactory.fromBitmap(iconBitmap);
-          update(true);
-          inputStream.close();
-        } catch (Exception e) {
-          update(true);
-        }
-      }
     } else {
       iconBitmapDescriptor = getBitmapDescriptorByName(uri);
       if (iconBitmapDescriptor != null) {
-        int drawableId = getDrawableResourceByName(uri);
-        iconBitmap = BitmapFactory.decodeResource(getResources(), drawableId);
-        if (iconBitmap == null) { // VectorDrawable or similar
-          Drawable drawable = getResources().getDrawable(drawableId);
-          iconBitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
-          drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
-          Canvas canvas = new Canvas(iconBitmap);
-          drawable.draw(canvas);
-        }
+          int drawableId = getDrawableResourceByName(uri);
+          iconBitmap = BitmapFactory.decodeResource(getResources(), drawableId);
+          if (iconBitmap == null) { // VectorDrawable or similar
+              Drawable drawable = getResources().getDrawable(drawableId);
+              iconBitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight(), Bitmap.Config.ARGB_8888);
+              drawable.setBounds(0, 0, drawable.getIntrinsicWidth(), drawable.getIntrinsicHeight());
+              Canvas canvas = new Canvas(iconBitmap);
+              drawable.draw(canvas);
+          }
+      }
+      if (this.markerManager != null && uri != null) {
+        this.markerManager.getSharedIcon(uri).updateIcon(iconBitmapDescriptor, iconBitmap);
       }
       update(true);
     }
+  }
+
+  public void setIconBitmapDescriptor(BitmapDescriptor bitmapDescriptor, Bitmap bitmap) {
+    this.iconBitmapDescriptor = bitmapDescriptor;
+    this.iconBitmap = bitmap;
+    this.hasViewChanges = true;
+    this.update(true);
+  }
+
+  public void setIconBitmap(Bitmap bitmap) {
+    this.iconBitmap = bitmap;
   }
 
   public MarkerOptions getMarkerOptions() {
@@ -398,6 +428,7 @@ public class AirMapMarker extends AirMapFeature {
         updateTracksViewChanges();
         update(true);
       }
+
     }
   }
 
