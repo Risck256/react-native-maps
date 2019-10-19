@@ -6,6 +6,7 @@ import android.util.DisplayMetrics;
 import android.view.WindowManager;
 
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.ViewGroupManager;
 import com.facebook.react.uimanager.annotations.ReactProp;
@@ -38,6 +39,11 @@ public class AirMapWMSTileManager extends ViewGroupManager<AirMapWMSTile> {
   @ReactProp(name = "urlTemplate")
   public void setUrlTemplate(AirMapWMSTile view, String urlTemplate) {
     view.setUrlTemplate(urlTemplate);
+  }
+
+  @ReactProp(name = "headers")
+  public void setHeaders(AirMapWMSTile view, ReadableMap headers) {
+    view.setHeaders(headers);
   }
 
   @ReactProp(name = "zIndex", defaultFloat = -1.0f)

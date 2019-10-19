@@ -87,7 +87,6 @@ RCT_EXPORT_VIEW_PROPERTY(customMapStyleString, NSString)
 RCT_EXPORT_VIEW_PROPERTY(mapPadding, UIEdgeInsets)
 RCT_REMAP_VIEW_PROPERTY(paddingAdjustmentBehavior, paddingAdjustmentBehaviorString, NSString)
 RCT_EXPORT_VIEW_PROPERTY(onMapReady, RCTBubblingEventBlock)
-RCT_EXPORT_VIEW_PROPERTY(onMapLoaded, RCTBubblingEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onKmlReady, RCTBubblingEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onPress, RCTBubblingEventBlock)
 RCT_EXPORT_VIEW_PROPERTY(onLongPress, RCTBubblingEventBlock)
@@ -332,7 +331,8 @@ RCT_EXPORT_METHOD(fitToSuppliedMarkers:(nonnull NSNumber *)reactTag
 RCT_EXPORT_METHOD(fitToCoordinates:(nonnull NSNumber *)reactTag
                   coordinates:(nonnull NSArray<AIRMapCoordinate *> *)coordinates
                   edgePadding:(nonnull NSDictionary *)edgePadding
-                  animated:(BOOL)animated)
+                  animated:(BOOL)animated
+                  duration:(float)duration)
 {
   [self.bridge.uiManager addUIBlock:^(__unused RCTUIManager *uiManager, NSDictionary<NSNumber *, UIView *> *viewRegistry) {
     id view = viewRegistry[reactTag];
@@ -356,7 +356,14 @@ RCT_EXPORT_METHOD(fitToCoordinates:(nonnull NSNumber *)reactTag
       GMSCameraUpdate *cameraUpdate = [GMSCameraUpdate fitBounds:bounds withEdgeInsets:UIEdgeInsetsMake(top, left, bottom, right)];
 
       if (animated) {
-        [mapView animateWithCameraUpdate: cameraUpdate];
+          if (duration != 0.0f) {
+              [CATransaction begin];    
+              [CATransaction setValue:[NSNumber numberWithFloat: duration] forKey:kCATransactionAnimationDuration];
+              [mapView animateWithCameraUpdate: cameraUpdate];
+              [CATransaction commit];
+          } else {
+              [mapView animateWithCameraUpdate: cameraUpdate];
+          }
       } else {
         [mapView moveCamera: cameraUpdate];
       }
@@ -574,11 +581,6 @@ RCT_EXPORT_METHOD(setIndoorActiveLevelIndex:(nonnull NSNumber *)reactTag
 - (void)mapViewDidStartTileRendering:(GMSMapView *)mapView {
   AIRGoogleMap *googleMapView = (AIRGoogleMap *)mapView;
   [googleMapView didPrepareMap];
-}
-
-- (void)mapViewDidFinishTileRendering:(GMSMapView *)mapView {
-  AIRGoogleMap *googleMapView = (AIRGoogleMap *)mapView;
-  [googleMapView mapViewDidFinishTileRendering];
 }
 
 - (BOOL)mapView:(GMSMapView *)mapView didTapMarker:(GMSMarker *)marker {
