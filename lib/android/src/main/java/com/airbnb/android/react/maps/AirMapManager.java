@@ -87,6 +87,30 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
         .emit("onError", error);
   }
 
+  //cluster props
+  @ReactProp(name = "clusterMarkers")
+  public void setClusterMarkers(AirMapView view, ReadableArray arr) {
+    view.setManagedCluster();
+    view.setClusterMarkers(arr);
+  }
+
+  @ReactProp(name = "assetMarker")
+  public void setAssetMarker(AirMapView view, ReadableMap path) {
+    view.setAssetMarker(path);
+  }
+
+  public Map getExportedCustomBubblingEventTypeConstants() {
+    return MapBuilder.builder()
+            .put(
+                    "onClusterMarkerPress",
+                    MapBuilder.of(
+                            "phasedRegistrationNames",
+                            MapBuilder.of("bubbled", "onClusterMarkerPress")))
+            .build();
+  }
+
+
+
   @ReactProp(name = "region")
   public void setRegion(AirMapView view, ReadableMap region) {
     view.setRegion(region);
@@ -377,7 +401,9 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
 
     map.putAll(MapBuilder.of(
         "onIndoorLevelActivated", MapBuilder.of("registrationName", "onIndoorLevelActivated"),
-        "onIndoorBuildingFocused", MapBuilder.of("registrationName", "onIndoorBuildingFocused")
+        "onIndoorBuildingFocused", MapBuilder.of("registrationName", "onIndoorBuildingFocused"),
+        "onDoublePress", MapBuilder.of("registrationName", "onDoublePress"),
+        "onMapLoaded", MapBuilder.of("registrationName", "onMapLoaded")
     ));
 
     return map;

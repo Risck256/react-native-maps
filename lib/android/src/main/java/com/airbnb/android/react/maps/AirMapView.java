@@ -9,8 +9,8 @@ import android.graphics.Point;
 import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.os.Build;
-import android.support.v4.view.GestureDetectorCompat;
-import android.support.v4.view.MotionEventCompat;
+import androidx.core.view.GestureDetectorCompat;
+import androidx.core.view.MotionEventCompat;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,6 +33,7 @@ import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.ViewProps;
 import com.facebook.react.uimanager.events.EventDispatcher;
+import com.facebook.react.uimanager.events.RCTEventEmitter;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -42,6 +43,7 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.Projection;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
@@ -49,9 +51,11 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PointOfInterest;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.VisibleRegion;
 import com.google.android.gms.maps.model.IndoorBuilding;
 import com.google.android.gms.maps.model.IndoorLevel;
+import com.google.maps.android.clustering.ClusterManager;
 import com.google.maps.android.data.kml.KmlContainer;
 import com.google.maps.android.data.kml.KmlLayer;
 import com.google.maps.android.data.kml.KmlPlacemark;
@@ -68,7 +72,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-import static android.support.v4.content.PermissionChecker.checkSelfPermission;
+import static androidx.core.content.PermissionChecker.checkSelfPermission;
 
 public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     GoogleMap.OnMarkerDragListener, OnMapReadyCallback, GoogleMap.OnPoiClickListener, GoogleMap.OnIndoorStateChangeListener {
@@ -100,6 +104,9 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   private final Map<Marker, AirMapMarker> markerMap = new HashMap<>();
   private final Map<Polyline, AirMapPolyline> polylineMap = new HashMap<>();
   private final Map<Polygon, AirMapPolygon> polygonMap = new HashMap<>();
+  private final Map<GroundOverlay, AirMapOverlay> overlayMap = new HashMap<>();
+  private final Map<TileOverlay, AirMapHeatmap> heatmapMap = new HashMap<>();
+  private final Map<TileOverlay, AirMapGradientPolyline> gradientPolylineMap = new HashMap<>();
   private final GestureDetectorCompat gestureDetector;
   private final AirMapManager manager;
   private LifecycleEventListener lifecycleListener;
@@ -107,6 +114,11 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   private boolean destroyed = false;
   private final ThemedReactContext context;
   private final EventDispatcher eventDispatcher;
+
+  //cluster variables
+  private boolean managedCluster = false;
+  private ClusterManager<ClusterUtils> mClusterManager;
+  private AirMapClusterRenderer renderer;
 
   private ViewAttacherGroup attacherGroup;
 
@@ -167,6 +179,12 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
             }
             return false;
           }
+
+          @Override
+          public boolean onDoubleTap(MotionEvent ev) {
+            onDoublePress(ev);
+            return false;
+          }
         });
 
     this.addOnLayoutChangeListener(new OnLayoutChangeListener() {
@@ -207,28 +225,6 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
 
     final AirMapView view = this;
 
-    map.setOnMyLocationChangeListener(new GoogleMap.OnMyLocationChangeListener() {
-      @Override
-      public void onMyLocationChange(Location location){
-        WritableMap event = new WritableNativeMap();
-
-        WritableMap coordinate = new WritableNativeMap();
-        coordinate.putDouble("latitude", location.getLatitude());
-        coordinate.putDouble("longitude", location.getLongitude());
-        coordinate.putDouble("altitude", location.getAltitude());
-        coordinate.putDouble("timestamp", location.getTime());
-        coordinate.putDouble("accuracy", location.getAccuracy());
-        coordinate.putDouble("speed", location.getSpeed());
-        if(android.os.Build.VERSION.SDK_INT >= 18){
-        coordinate.putBoolean("isFromMockProvider", location.isFromMockProvider());
-        }
-
-        event.putMap("coordinate", coordinate);
-
-        manager.pushEvent(context, view, "onUserLocationChange", event);
-      }
-    });
-
     map.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
       @Override
       public boolean onMarkerClick(Marker marker) {
@@ -257,24 +253,6 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       }
     });
 
-    map.setOnPolygonClickListener(new GoogleMap.OnPolygonClickListener() {
-      @Override
-      public void onPolygonClick(Polygon polygon) {
-        WritableMap event = makeClickEventData(polygon.getPoints().get(0));
-        event.putString("action", "polygon-press");
-        manager.pushEvent(context, polygonMap.get(polygon), "onPress", event);
-      }
-    });
-
-    map.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener() {
-      @Override
-      public void onPolylineClick(Polyline polyline) {
-        WritableMap event = makeClickEventData(polyline.getPoints().get(0));
-        event.putString("action", "polyline-press");
-        manager.pushEvent(context, polylineMap.get(polyline), "onPress", event);
-      }
-    });
-
     map.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
       @Override
       public void onInfoWindowClick(Marker marker) {
@@ -296,6 +274,60 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       }
     });
 
+    map.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
+      @Override
+      public void onCameraIdle() {
+        LatLngBounds bounds = map.getProjection().getVisibleRegion().latLngBounds;
+        if ((cameraMoveReason != 0) &&
+          ((cameraLastIdleBounds == null) ||
+            LatLngBoundsUtils.BoundsAreDifferent(bounds, cameraLastIdleBounds))) {
+          cameraLastIdleBounds = bounds;
+          eventDispatcher.dispatchEvent(new RegionChangeEvent(getId(), bounds, false));
+        }
+      }
+    });
+
+    map.setOnMyLocationChangeListener(new GoogleMap.OnMyLocationChangeListener() {
+      @Override
+      public void onMyLocationChange(Location location){
+        WritableMap event = new WritableNativeMap();
+
+        WritableMap coordinate = new WritableNativeMap();
+        coordinate.putDouble("latitude", location.getLatitude());
+        coordinate.putDouble("longitude", location.getLongitude());
+        coordinate.putDouble("altitude", location.getAltitude());
+        coordinate.putDouble("timestamp", location.getTime());
+        coordinate.putDouble("accuracy", location.getAccuracy());
+        coordinate.putDouble("speed", location.getSpeed());
+        coordinate.putDouble("heading", location.getBearing());
+        if(android.os.Build.VERSION.SDK_INT >= 18){
+        coordinate.putBoolean("isFromMockProvider", location.isFromMockProvider());
+        }
+
+        event.putMap("coordinate", coordinate);
+
+        manager.pushEvent(context, view, "onUserLocationChange", event);
+      }
+    });
+
+    map.setOnPolygonClickListener(new GoogleMap.OnPolygonClickListener() {
+      @Override
+      public void onPolygonClick(Polygon polygon) {
+        WritableMap event = makeClickEventData(polygon.getPoints().get(0));
+        event.putString("action", "polygon-press");
+        manager.pushEvent(context, polygonMap.get(polygon), "onPress", event);
+      }
+    });
+
+    map.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener() {
+      @Override
+      public void onPolylineClick(Polyline polyline) {
+        WritableMap event = makeClickEventData(polyline.getPoints().get(0));
+        event.putString("action", "polyline-press");
+        manager.pushEvent(context, polylineMap.get(polyline), "onPress", event);
+      }
+    });
+
     map.setOnMapClickListener(new GoogleMap.OnMapClickListener() {
       @Override
       public void onMapClick(LatLng point) {
@@ -311,6 +343,15 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
         WritableMap event = makeClickEventData(point);
         event.putString("action", "long-press");
         manager.pushEvent(context, view, "onLongPress", makeClickEventData(point));
+      }
+    });
+
+    map.setOnGroundOverlayClickListener(new GoogleMap.OnGroundOverlayClickListener() {
+      @Override
+      public void onGroundOverlayClick(GroundOverlay groundOverlay) {
+        WritableMap event = makeClickEventData(groundOverlay.getPosition());
+        event.putString("action", "overlay-press");
+        manager.pushEvent(context, overlayMap.get(groundOverlay), "onPress", event);
       }
     });
 
@@ -330,22 +371,10 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       }
     });
 
-    map.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
-      @Override
-      public void onCameraIdle() {
-        LatLngBounds bounds = map.getProjection().getVisibleRegion().latLngBounds;
-        if ((cameraMoveReason != 0) &&
-          ((cameraLastIdleBounds == null) ||
-            LatLngBoundsUtils.BoundsAreDifferent(bounds, cameraLastIdleBounds))) {
-          cameraLastIdleBounds = bounds;
-          eventDispatcher.dispatchEvent(new RegionChangeEvent(getId(), bounds, false));
-        }
-      }
-    });
-
     map.setOnMapLoadedCallback(new GoogleMap.OnMapLoadedCallback() {
       @Override public void onMapLoaded() {
         isMapLoaded = true;
+        manager.pushEvent(context, view, "onMapLoaded", new WritableNativeMap());
         AirMapView.this.cacheView();
       }
     });
@@ -420,6 +449,70 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     }
     onDestroy();
   }
+
+
+  //cluster methods
+  public void setManagedCluster() {
+    if (!this.managedCluster) {
+      mClusterManager = new ClusterManager<>(this.context, map);
+      mClusterManager.setOnClusterClickListener(new ClusterManager.OnClusterClickListener<ClusterUtils>() {
+        @Override
+        public boolean onClusterClick(com.google.maps.android.clustering.Cluster<ClusterUtils> cluster) {
+          map.animateCamera(CameraUpdateFactory.newLatLngZoom(cluster.getPosition(), (float) Math.floor(map.getCameraPosition().zoom + 1)), 300, null);
+          return true;
+        }
+      });
+      mClusterManager.setOnClusterItemClickListener(new ClusterManager.OnClusterItemClickListener<ClusterUtils>() {
+        @Override
+        public boolean onClusterItemClick(ClusterUtils cluster) {
+          WritableMap event = Arguments.createMap();
+          event.putString("id", cluster.id);
+          context.getJSModule(RCTEventEmitter.class).receiveEvent(
+                  getId(),
+                  "onClusterMarkerPress",
+                  event);
+          return true;
+        }
+      });
+      renderer = new AirMapClusterRenderer(this.context, map, mClusterManager);
+      mClusterManager.setRenderer(renderer);
+      map.setOnMarkerClickListener(mClusterManager);
+      map.setOnInfoWindowClickListener(mClusterManager);
+      map.setOnCameraIdleListener(mClusterManager);
+
+      this.managedCluster = true;
+    }
+  }
+
+  public void setClusterMarkers(ReadableArray region) {
+    if (region == null) {
+      return;
+    }
+    if (region.size() == 0) {
+      return;
+    }
+    for (int i = 0; i < region.size(); i++) {
+      Double lat = region.getMap(i).getDouble("latitude");
+      Double lon = region.getMap(i).getDouble("longitude");
+      String id = region.getMap(i).getString("id");
+      LatLng latLng = new LatLng(lat, lon);
+      mClusterManager.addItem(new ClusterUtils(latLng, id, id));
+    }
+  }
+
+  public void setAssetMarker(ReadableMap path) {
+//    renderer = new AirMapClusterRenderer(this.context, map, mClusterManager);
+    renderer.setPathImage(path);
+    mClusterManager.setRenderer(renderer);
+  }
+
+  private void setRenderer() {
+//    initRenderer();
+//    mClusterManager.setRenderer(renderer);
+  }
+
+
+
 
   public void setInitialRegion(ReadableMap initialRegion) {
     if (!initialRegionSet && initialRegion != null) {
@@ -603,6 +696,12 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       features.add(index, polylineView);
       Polyline polyline = (Polyline) polylineView.getFeature();
       polylineMap.put(polyline, polylineView);
+    } else if (child instanceof AirMapGradientPolyline) {
+      AirMapGradientPolyline polylineView = (AirMapGradientPolyline) child;
+      polylineView.addToMap(map);
+      features.add(index, polylineView);
+      TileOverlay tileOverlay = (TileOverlay) polylineView.getFeature();
+      gradientPolylineMap.put(tileOverlay, polylineView);
     } else if (child instanceof AirMapPolygon) {
       AirMapPolygon polygonView = (AirMapPolygon) child;
       polygonView.addToMap(map);
@@ -629,6 +728,14 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       AirMapOverlay overlayView = (AirMapOverlay) child;
       overlayView.addToMap(map);
       features.add(index, overlayView);
+      GroundOverlay overlay = (GroundOverlay) overlayView.getFeature();
+      overlayMap.put(overlay, overlayView);
+    } else if (child instanceof AirMapHeatmap) {
+      AirMapHeatmap heatmapView = (AirMapHeatmap) child;
+      heatmapView.addToMap(map);
+      features.add(index, heatmapView);
+      TileOverlay heatmap = (TileOverlay)heatmapView.getFeature();
+      heatmapMap.put(heatmap, heatmapView);
     } else if (child instanceof ViewGroup) {
       ViewGroup children = (ViewGroup) child;
       for (int i = 0; i < children.getChildCount(); i++) {
@@ -651,6 +758,8 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     AirMapFeature feature = features.remove(index);
     if (feature instanceof AirMapMarker) {
       markerMap.remove(feature.getFeature());
+    } else if (feature instanceof AirMapHeatmap) {
+      heatmapMap.remove(feature.getFeature());
     }
     feature.removeFromMap(map);
   }
@@ -834,6 +943,7 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   public void fitToCoordinates(ReadableArray coordinatesArray, ReadableMap edgePadding,
       boolean animated) {
     if (map == null) return;
+    if (map != null) return;
 
     LatLngBounds.Builder builder = new LatLngBounds.Builder();
 
@@ -1055,6 +1165,13 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     LatLng coords = this.map.getProjection().fromScreenLocation(point);
     WritableMap event = makeClickEventData(coords);
     manager.pushEvent(context, this, "onPanDrag", event);
+  }
+
+  public void onDoublePress(MotionEvent ev) {
+    Point point = new Point((int) ev.getX(), (int) ev.getY());
+    LatLng coords = this.map.getProjection().fromScreenLocation(point);
+    WritableMap event = makeClickEventData(coords);
+    manager.pushEvent(context, this, "onDoublePress", event);
   }
 
   public void setKmlSrc(String kmlSrc) {
