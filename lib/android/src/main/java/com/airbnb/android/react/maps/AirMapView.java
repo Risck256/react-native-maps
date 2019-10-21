@@ -943,7 +943,6 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   public void fitToCoordinates(ReadableArray coordinatesArray, ReadableMap edgePadding,
       boolean animated) {
     if (map == null) return;
-    if (map != null) return;
 
     LatLngBounds.Builder builder = new LatLngBounds.Builder();
 
