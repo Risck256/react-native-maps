@@ -158,6 +158,7 @@ public class AirMapWMSTile extends AirMapFeature {
   private TileOverlayOptions tileOverlayOptions;
   private TileOverlay tileOverlay;
   private AIRMapGSUrlTileProvider tileProvider;
+  private AIRMapGSUrlTileProviderHeaders tileProviderHeaders;
 
   private String urlTemplate;
   private float zIndex;
@@ -165,6 +166,7 @@ public class AirMapWMSTile extends AirMapFeature {
   private float minimumZ;
   private int tileSize;
   private float opacity;
+  private ReadableMap headers = null;
 
   public AirMapWMSTile(Context context) {
     super(context);
@@ -172,6 +174,9 @@ public class AirMapWMSTile extends AirMapFeature {
 
   public void setUrlTemplate(String urlTemplate) {
     this.urlTemplate = urlTemplate;
+    if (tileProviderHeaders != null) {
+      tileProviderHeaders.setUrlTemplate(urlTemplate);
+    }
     if (tileProvider != null) {
       tileProvider.setUrlTemplate(urlTemplate);
     }
@@ -228,8 +233,13 @@ public class AirMapWMSTile extends AirMapFeature {
     TileOverlayOptions options = new TileOverlayOptions();
     options.zIndex(zIndex);
     options.transparency(1-opacity);
-    this.tileProvider = new AIRMapGSUrlTileProvider(this.tileSize, this.tileSize, this.urlTemplate);
-    options.tileProvider(this.tileProvider);
+    if (this.headers == null) {
+      this.tileProvider = new AIRMapGSUrlTileProvider(this.tileSize, this.tileSize, this.urlTemplate);
+      options.tileProvider(this.tileProvider);
+    } else {
+      this.tileProviderHeaders = new AIRMapGSUrlTileProviderHeaders(this.tileSize, this.tileSize, this.urlTemplate, this.headers);
+      options.tileProvider(this.tileProviderHeaders);
+    }
     return options;
   }
 
