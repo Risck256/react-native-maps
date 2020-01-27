@@ -16,11 +16,13 @@
 @property (nonatomic, strong) NSString *template;
 @property (nonatomic, assign) NSInteger maximumZ;
 @property (nonatomic, assign) NSInteger minimumZ;
+@property (nonatomic, strong) NSDictionary *headers;
 @end
 
 @interface AIRGoogleMapWMSTile : UIView
 @property (nonatomic, strong) WMSTileOverlay *tileLayer;
 @property (nonatomic, assign) NSString *urlTemplate;
+@property (nonatomic, assign) NSDictionary *headers;
 @property (nonatomic, assign) int zIndex;
 @property (nonatomic, assign) NSInteger maximumZ;
 @property (nonatomic, assign) NSInteger minimumZ;

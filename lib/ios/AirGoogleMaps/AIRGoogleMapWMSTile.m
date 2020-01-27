@@ -58,6 +58,15 @@
     }
 }
 
+- (void)setHeaders:(NSDictionary *)headers
+{
+    _headers = headers;
+    if(self.tileLayer ) {
+        [self.tileLayer setHeaders:headers];
+        [self.tileLayer clearTileCache];
+    }
+}
+
 - (void)setUrlTemplate:(NSString *)urlTemplate
 {
     _urlTemplate = urlTemplate;
@@ -68,6 +77,7 @@
     [tile setOpacity: _opacity];
     [tile setTileSize: _tileSize];
     [tile setZIndex: _zIndex];
+    [tile setHeaders:_headers];
     _tileLayer = tile;
 }
 @end
@@ -96,8 +106,7 @@
     
 }
 
-- (UIImage *)tileForX:(NSUInteger)x y:(NSUInteger)y zoom:(NSUInteger)zoom
-{
+- (NSURL *)getUrlFromTemplateWithX:(NSUInteger)x y:(NSUInteger)y zoom:(NSUInteger)zoom {
     NSInteger maximumZ = self.maximumZ;
     NSInteger minimumZ = self.minimumZ;
     if(maximumZ && (long)zoom > (long)maximumZ) {
@@ -114,7 +123,38 @@
     [url replaceOccurrencesOfString: @"{maxY}" withString:[NSString stringWithFormat:@"%@", bb[3]] options:0 range:NSMakeRange(0, url.length)];
     [url replaceOccurrencesOfString: @"{width}" withString:[NSString stringWithFormat:@"%d", (int)self.tileSize] options:0 range:NSMakeRange(0, url.length)];
     [url replaceOccurrencesOfString: @"{height}" withString:[NSString stringWithFormat:@"%d", (int)self.tileSize] options:0 range:NSMakeRange(0, url.length)];
-    NSURL *uri =  [NSURL URLWithString:url];
+    return  [NSURL URLWithString:url];
+}
+
+- (void) requestTileForX:(NSUInteger)x y:(NSUInteger)y zoom:(NSUInteger)zoom receiver:(id<GMSTileReceiver>)receiver {
+    NSURL *uri =  [ self getUrlFromTemplateWithX:x y:y zoom:zoom];
+    NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:uri];
+    for (NSString* key in self.headers) {
+        [request setValue:self.headers[key] forHTTPHeaderField:key];
+    }
+    NSURLSessionDownloadTask *downloadTask = [[NSURLSession sharedSession]
+                                              downloadTaskWithRequest:request completionHandler:^(NSURL *location, NSURLResponse *response, NSError *error) {
+                                                  // 3
+                                                  NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *) response;
+                                                  long statusCode = [httpResponse statusCode];
+                                                  if (statusCode == 200) {
+                                                      NSData *data = [NSData dataWithContentsOfURL:location];
+                                                      //                                                           NSByteCountFormatter *byte = [[NSByteCountFormatter new] stringFromByteCount:data.length];
+                                                      if (data.length > 150) {
+                                                          UIImage *img = [UIImage imageWithData:
+                                                                          [NSData dataWithContentsOfURL:location]];
+                                                          [receiver receiveTileWithX:x y:y zoom:zoom image:img];
+                                                      } else {
+                                                          [receiver receiveTileWithX:x y:y zoom:zoom image:nil];
+                                                      }
+                                                  }
+                                              }];
+    [downloadTask resume];
+}
+
+- (UIImage *)tileForX:(NSUInteger)x y:(NSUInteger)y zoom:(NSUInteger)zoom
+{
+    NSURL *uri =  [ self getUrlFromTemplateWithX:x y:y zoom:zoom];
     NSData *data = [NSData dataWithContentsOfURL:uri];
     UIImage *img = [[UIImage alloc] initWithData:data];
     return img;
