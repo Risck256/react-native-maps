@@ -35,6 +35,11 @@ public class AirMapWMSTileManager extends ViewGroupManager<AirMapWMSTile> {
     return new AirMapWMSTile(context);
   }
 
+  @ReactProp(name = "headers")
+  public void setHeaders(AirMapWMSTile view, ReadableMap headers) {
+    view.setHeaders(headers);
+  }
+
   @ReactProp(name = "urlTemplate")
   public void setUrlTemplate(AirMapWMSTile view, String urlTemplate) {
     view.setUrlTemplate(urlTemplate);
