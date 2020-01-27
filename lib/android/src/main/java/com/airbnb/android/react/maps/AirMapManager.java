@@ -81,7 +81,7 @@ public class AirMapManager extends ViewGroupManager<AirMapView> {
   }
 
   @ReactProp(name = "clusterMarker")
-  public void setClusterMarker(AirMapView view, ReadableArray regions) {
+  public void addClusterMarker(AirMapView view, ReadableArray regions) {
     view.addClusterMarker(regions);
   }
 
