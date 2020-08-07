@@ -33,7 +33,6 @@ import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.uimanager.UIManagerModule;
 import com.facebook.react.uimanager.ViewProps;
 import com.facebook.react.uimanager.events.EventDispatcher;
-import com.facebook.react.uimanager.events.RCTEventEmitter;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -55,7 +54,6 @@ import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.VisibleRegion;
 import com.google.android.gms.maps.model.IndoorBuilding;
 import com.google.android.gms.maps.model.IndoorLevel;
-import com.google.maps.android.clustering.ClusterManager;
 import com.google.maps.android.data.kml.KmlContainer;
 import com.google.maps.android.data.kml.KmlLayer;
 import com.google.maps.android.data.kml.KmlPlacemark;
@@ -114,11 +112,7 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   private boolean destroyed = false;
   private final ThemedReactContext context;
   private final EventDispatcher eventDispatcher;
-
-  //cluster variables
-  private boolean managedCluster = false;
-  private ClusterManager<ClusterUtils> mClusterManager;
-  private AirMapClusterRenderer renderer;
+  private FusedLocationSource fusedLocationSource;
 
   private ViewAttacherGroup attacherGroup;
 
@@ -167,6 +161,8 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     super.getMapAsync(this);
 
     final AirMapView view = this;
+
+    fusedLocationSource = new FusedLocationSource(context);
 
     gestureDetector =
         new GestureDetectorCompat(reactContext, new GestureDetector.SimpleOnGestureListener() {
@@ -225,6 +221,29 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
 
     final AirMapView view = this;
 
+    map.setOnMyLocationChangeListener(new GoogleMap.OnMyLocationChangeListener() {
+      @Override
+      public void onMyLocationChange(Location location){
+        WritableMap event = new WritableNativeMap();
+
+        WritableMap coordinate = new WritableNativeMap();
+        coordinate.putDouble("latitude", location.getLatitude());
+        coordinate.putDouble("longitude", location.getLongitude());
+        coordinate.putDouble("altitude", location.getAltitude());
+        coordinate.putDouble("timestamp", location.getTime());
+        coordinate.putDouble("accuracy", location.getAccuracy());
+        coordinate.putDouble("speed", location.getSpeed());
+        coordinate.putDouble("heading", location.getBearing());
+        if(android.os.Build.VERSION.SDK_INT >= 18){
+        coordinate.putBoolean("isFromMockProvider", location.isFromMockProvider());
+        }
+
+        event.putMap("coordinate", coordinate);
+
+        manager.pushEvent(context, view, "onUserLocationChange", event);
+      }
+    });
+
     map.setOnMarkerClickListener(new GoogleMap.OnMarkerClickListener() {
       @Override
       public boolean onMarkerClick(Marker marker) {
@@ -253,6 +272,24 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       }
     });
 
+    map.setOnPolygonClickListener(new GoogleMap.OnPolygonClickListener() {
+      @Override
+      public void onPolygonClick(Polygon polygon) {
+        WritableMap event = makeClickEventData(polygon.getPoints().get(0));
+        event.putString("action", "polygon-press");
+        manager.pushEvent(context, polygonMap.get(polygon), "onPress", event);
+      }
+    });
+
+    map.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener() {
+      @Override
+      public void onPolylineClick(Polyline polyline) {
+        WritableMap event = makeClickEventData(polyline.getPoints().get(0));
+        event.putString("action", "polyline-press");
+        manager.pushEvent(context, polylineMap.get(polyline), "onPress", event);
+      }
+    });
+
     map.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
       @Override
       public void onInfoWindowClick(Marker marker) {
@@ -271,60 +308,6 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
         event.putString("action", "callout-press");
         AirMapCallout infoWindow = markerView.getCalloutView();
         if (infoWindow != null) manager.pushEvent(context, infoWindow, "onPress", event);
-      }
-    });
-
-    map.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
-      @Override
-      public void onCameraIdle() {
-        LatLngBounds bounds = map.getProjection().getVisibleRegion().latLngBounds;
-        if ((cameraMoveReason != 0) &&
-          ((cameraLastIdleBounds == null) ||
-            LatLngBoundsUtils.BoundsAreDifferent(bounds, cameraLastIdleBounds))) {
-          cameraLastIdleBounds = bounds;
-          eventDispatcher.dispatchEvent(new RegionChangeEvent(getId(), bounds, false));
-        }
-      }
-    });
-
-    map.setOnMyLocationChangeListener(new GoogleMap.OnMyLocationChangeListener() {
-      @Override
-      public void onMyLocationChange(Location location){
-        WritableMap event = new WritableNativeMap();
-
-        WritableMap coordinate = new WritableNativeMap();
-        coordinate.putDouble("latitude", location.getLatitude());
-        coordinate.putDouble("longitude", location.getLongitude());
-        coordinate.putDouble("altitude", location.getAltitude());
-        coordinate.putDouble("timestamp", location.getTime());
-        coordinate.putDouble("accuracy", location.getAccuracy());
-        coordinate.putDouble("speed", location.getSpeed());
-        coordinate.putDouble("heading", location.getBearing());
-        if(android.os.Build.VERSION.SDK_INT >= 18){
-        coordinate.putBoolean("isFromMockProvider", location.isFromMockProvider());
-        }
-
-        event.putMap("coordinate", coordinate);
-
-        manager.pushEvent(context, view, "onUserLocationChange", event);
-      }
-    });
-
-    map.setOnPolygonClickListener(new GoogleMap.OnPolygonClickListener() {
-      @Override
-      public void onPolygonClick(Polygon polygon) {
-        WritableMap event = makeClickEventData(polygon.getPoints().get(0));
-        event.putString("action", "polygon-press");
-        manager.pushEvent(context, polygonMap.get(polygon), "onPress", event);
-      }
-    });
-
-    map.setOnPolylineClickListener(new GoogleMap.OnPolylineClickListener() {
-      @Override
-      public void onPolylineClick(Polyline polyline) {
-        WritableMap event = makeClickEventData(polyline.getPoints().get(0));
-        event.putString("action", "polyline-press");
-        manager.pushEvent(context, polylineMap.get(polyline), "onPress", event);
       }
     });
 
@@ -371,6 +354,19 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
       }
     });
 
+    map.setOnCameraIdleListener(new GoogleMap.OnCameraIdleListener() {
+      @Override
+      public void onCameraIdle() {
+        LatLngBounds bounds = map.getProjection().getVisibleRegion().latLngBounds;
+        if ((cameraMoveReason != 0) &&
+          ((cameraLastIdleBounds == null) ||
+            LatLngBoundsUtils.BoundsAreDifferent(bounds, cameraLastIdleBounds))) {
+          cameraLastIdleBounds = bounds;
+          eventDispatcher.dispatchEvent(new RegionChangeEvent(getId(), bounds, false));
+        }
+      }
+    });
+
     map.setOnMapLoadedCallback(new GoogleMap.OnMapLoadedCallback() {
       @Override public void onMapLoaded() {
         isMapLoaded = true;
@@ -392,6 +388,7 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
         if (hasPermissions()) {
           //noinspection MissingPermission
           map.setMyLocationEnabled(showUserLocation);
+          map.setLocationSource(fusedLocationSource);
         }
         synchronized (AirMapView.this) {
           if (!destroyed) {
@@ -449,70 +446,6 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
     }
     onDestroy();
   }
-
-
-  //cluster methods
-  public void setManagedCluster() {
-    if (!this.managedCluster) {
-      mClusterManager = new ClusterManager<>(this.context, map);
-      mClusterManager.setOnClusterClickListener(new ClusterManager.OnClusterClickListener<ClusterUtils>() {
-        @Override
-        public boolean onClusterClick(com.google.maps.android.clustering.Cluster<ClusterUtils> cluster) {
-          map.animateCamera(CameraUpdateFactory.newLatLngZoom(cluster.getPosition(), (float) Math.floor(map.getCameraPosition().zoom + 1)), 300, null);
-          return true;
-        }
-      });
-      mClusterManager.setOnClusterItemClickListener(new ClusterManager.OnClusterItemClickListener<ClusterUtils>() {
-        @Override
-        public boolean onClusterItemClick(ClusterUtils cluster) {
-          WritableMap event = Arguments.createMap();
-          event.putString("id", cluster.id);
-          context.getJSModule(RCTEventEmitter.class).receiveEvent(
-                  getId(),
-                  "onClusterMarkerPress",
-                  event);
-          return true;
-        }
-      });
-      renderer = new AirMapClusterRenderer(this.context, map, mClusterManager);
-      mClusterManager.setRenderer(renderer);
-      map.setOnMarkerClickListener(mClusterManager);
-      map.setOnInfoWindowClickListener(mClusterManager);
-      map.setOnCameraIdleListener(mClusterManager);
-
-      this.managedCluster = true;
-    }
-  }
-
-  public void setClusterMarkers(ReadableArray region) {
-    if (region == null) {
-      return;
-    }
-    if (region.size() == 0) {
-      return;
-    }
-    for (int i = 0; i < region.size(); i++) {
-      Double lat = region.getMap(i).getDouble("latitude");
-      Double lon = region.getMap(i).getDouble("longitude");
-      String id = region.getMap(i).getString("id");
-      LatLng latLng = new LatLng(lat, lon);
-      mClusterManager.addItem(new ClusterUtils(latLng, id, id));
-    }
-  }
-
-  public void setAssetMarker(ReadableMap path) {
-//    renderer = new AirMapClusterRenderer(this.context, map, mClusterManager);
-    renderer.setPathImage(path);
-    mClusterManager.setRenderer(renderer);
-  }
-
-  private void setRenderer() {
-//    initRenderer();
-//    mClusterManager.setRenderer(renderer);
-  }
-
-
-
 
   public void setInitialRegion(ReadableMap initialRegion) {
     if (!initialRegionSet && initialRegion != null) {
@@ -584,9 +517,22 @@ public class AirMapView extends MapView implements GoogleMap.InfoWindowAdapter,
   public void setShowsUserLocation(boolean showUserLocation) {
     this.showUserLocation = showUserLocation; // hold onto this for lifecycle handling
     if (hasPermissions()) {
+      map.setLocationSource(fusedLocationSource);
       //noinspection MissingPermission
       map.setMyLocationEnabled(showUserLocation);
     }
+  }
+
+  public void setUserLocationPriority(int priority){
+    fusedLocationSource.setPriority(priority);
+  }
+
+  public void setUserLocationUpdateInterval(int interval){
+    fusedLocationSource.setInterval(interval);
+  }
+
+  public void setUserLocationFastestInterval(int interval){
+    fusedLocationSource.setFastestInterval(interval);
   }
 
   public void setShowsMyLocationButton(boolean showMyLocationButton) {

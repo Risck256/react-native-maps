@@ -212,6 +212,7 @@ declare module "react-native-maps" {
     initialCamera?: Camera;
     liteMode?: boolean;
     mapPadding?: EdgePadding;
+    paddingAdjustmentBehavior?: "always" | "automatic" | "never";
     maxDelta?: number;
     minDelta?: number;
     legalLabelInsets?: EdgeInsets;
@@ -332,6 +333,11 @@ declare module "react-native-maps" {
      */
     redrawCallout(): void;
     /**
+     * Causes a redraw of the marker. Useful when there are updates to the 
+     * marker and `tracksViewChanges` comes with a cost that is too high.
+     */
+    redraw(): void
+    /**
      * Animates marker movement.
      * __Android only__
      */
@@ -437,9 +443,12 @@ declare module "react-native-maps" {
 
   export interface MapUrlTileProps extends ViewProperties {
     urlTemplate: string;
+    minimumZ?: number;
     maximumZ?: number;
     zIndex?: number;
     tileSize?: number;
+    shouldReplaceMapContent?:boolean;
+    flipY?: boolean;
   }
 
   export class UrlTile extends React.Component<MapUrlTileProps, any> {}
@@ -506,6 +515,21 @@ declare module "react-native-maps" {
   }
 
   export class Heatmap extends React.Component<MapHeatmapProps, any> {}
+
+  // =======================================================================
+  //  Geojson
+  // =======================================================================
+
+  import GeoJSON from 'geojson';
+
+  export interface GeojsonProps {
+    geojson: GeoJSON.GeoJSON;
+    strokeColor?: string;
+    fillColor?: string;
+    strokeWidth?: number;
+  }
+
+  export class Geojson extends React.Component<GeojsonProps, any> {}
 
   // =======================================================================
   //  Constants
